@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive Premier League Consistency Chart</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            padding: 30px; 
+            background-color: #f9f9fb; 
+        }
+        .bar { 
+            fill: url(#gradient); 
+            transition: fill 0.2s; 
+        }
+        .bar:hover { 
+            filter: drop-shadow(0px 0px 5px #555); 
+            cursor: pointer; 
+        }
+        .tooltip { 
+            position: absolute; 
+            background: #ffffff; 
+            padding: 8px; 
+            border: 1px solid #cccccc; 
+            border-radius: 4px; 
+            pointer-events: none; 
+            font-size: 13px; 
+        }
+        #data-description { 
+            margin-bottom: 25px; 
+            max-width: 800px; 
+        }
+    </style>
+</head>
+<body>
+    <h2>Interactive Team Consistency in Premier League</h2>
+
+    <!-- DATA PROCESSING DESCRIPTION -->
+    <div id="data-description">
+        <h3>Data Processing and Sources</h3>
+        <p>
+            <strong>Data Source:</strong> League table data (1992–2023) from 
+            <a href="https://www.kaggle.com/datasets/evangower/english-premier-league-standings">Football-Data.co.uk</a>.<br>
+            <strong>Processing Steps:</strong> 
+            <ul>
+                <li>Computed standard deviation of league positions for each team using Python/Pandas.</li>
+                <li>Filtered teams with fewer than 5 seasons to avoid skewed results.</li>
+                <li>Standardized team names (e.g., "Man Utd" → "Manchester United").</li>
+            </ul>
+        </p>
+        <p><em>Code adapted from D3.js documentation examples.</em></p>
+    </div>
+
+    <!-- INTERACTIVE FILTER -->
+    <label for="topFilter">Show Top: </label>
+    <select id="topFilter">
+        <option value="5">Top 5</option>
+        <option value="10" selected>Top 10</option>
+        <option value="15">All</option>
+    </select>
+
+    <!-- VISUALIZATION CONTAINER -->
+    <svg width="960" height="500"></svg>
+
+    <script>
+        // EMBEDDED JSON DATA
+        const fullData = [
+            {"Team":"Hull City","StdDevPosition":1.14},
+            {"Team":"Oldham Athletic","StdDevPosition":1.41},
+            {"Team":"Cardiff City","StdDevPosition":1.41},
+            {"Team":"Liverpool","StdDevPosition":1.99},
+            {"Team":"Manchester Utd","StdDevPosition":2.03},
+            {"Team":"Bradford City","StdDevPosition":2.12},
+            {"Team":"Arsenal","StdDevPosition":2.56},
+            {"Team":"Coventry City","StdDevPosition":2.62},
+            {"Team":"Wigan Athletic","StdDevPosition":2.83},
+            {"Team":"Huddersfield","StdDevPosition":2.83},
+            {"Team":"Bournemouth","StdDevPosition":2.98},
+            {"Team":"Stoke City","StdDevPosition":3.05},
+            {"Team":"Swansea City","StdDevPosition":3.44},
+            {"Team":"Tottenham","StdDevPosition":3.46},
+            {"Team":"Watford","StdDevPosition":3.50}
+        ];
+
+        // D3.js CODE (FIXED)
+        const svg = d3.select("svg");
+        const margin = { top: 50, right: 30, bottom: 120, left: 80 };
+        const width = 960 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        // Append gradient
+        svg.append("defs")
+           .append("linearGradient")
+           .attr("id", "gradient")
+           .attr("x1", "0%").attr("y1", "0%")
+           .attr("x2", "100%").attr("y2", "0%")
+           .selectAll("stop")
+           .data([{offset: "0%", color: "#60c3c0"}, {offset: "100%", color: "#9183e0"}])
+           .enter()
+           .append("stop")
+           .attr("offset", d => d.offset)
+           .attr("stop-color", d => d.color);
+
+        const chart = svg.append("g")
+                         .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const tooltip = d3.select("body")
+                          .append("div")
+                          .attr("class", "tooltip")
+                          .style("opacity", 0);
+
+        function update(filteredData) {
+            // Clear previous elements
+            chart.selectAll("*").remove();
+
+            // Scales
+            const x = d3.scaleBand()
+                        .domain(filteredData.map(d => d.Team))
+                        .range([0, width])
+                        .padding(0.2);
+
+            const y = d3.scaleLinear()
+                        .domain([0, d3.max(filteredData, d => d.StdDevPosition)])
+                        .range([height, 0]);
+
+            // Axes
+            chart.append("g")
+                 .attr("transform", `translate(0,${height})`)
+                 .call(d3.axisBottom(x))
+                 .selectAll("text")
+                 .attr("transform", "rotate(-40)")
+                 .style("text-anchor", "end");
+
+            chart.append("g")
+                 .call(d3.axisLeft(y));
+
+            // Bars
+            chart.selectAll(".bar")
+                 .data(filteredData)
+                 .enter()
+                 .append("rect")
+                 .attr("class", "bar")
+                 .attr("x", d => x(d.Team))
+                 .attr("y", d => y(d.StdDevPosition))
+                 .attr("width", x.bandwidth())
+                 .attr("height", d => height - y(d.StdDevPosition))
+                 .on("mouseover", (event, d) => {
+                     tooltip.style("opacity", 0.9)
+                            .html(`Team: ${d.Team}<br>Std Dev: ${d.StdDevPosition.toFixed(2)}`)
+                            .style("left", `${event.pageX + 10}px`)
+                            .style("top", `${event.pageY - 28}px`);
+                 })
+                 .on("mouseout", () => tooltip.style("opacity", 0));
+
+            // Title
+            svg.append("text")
+               .attr("x", width / 2 + margin.left)
+               .attr("y", 30)
+               .attr("text-anchor", "middle")
+               .style("font-size", "18px")
+               .text("Team Consistency (Lower Std Dev = More Consistent)");
+        }
+
+        function filterAndUpdate(topN) {
+            const filtered = fullData
+                .sort((a, b) => a.StdDevPosition - b.StdDevPosition)
+                .slice(0, topN);
+            update(filtered);
+        }
+
+        d3.select("#topFilter").on("change", function() {
+            filterAndUpdate(+this.value === 15 ? fullData.length : +this.value);
+        });
+
+        // Initial render
+        filterAndUpdate(10);
+    </script>
+</body>
+</html>
